@@ -1,0 +1,59 @@
+# Reconstruit les bases (cartes, Pokédex, Connexions) à partir des sources officielles et les publie dans data/.
+# Chaque lundi (accord de l'utilisateur du 26/11/2026), à la demande (bouton « Run workflow »), ou quand les scripts changent.
+# Aucun code des sources n'est exécuté : elles sont seulement lues comme du texte. Actions épinglées par SHA.
+name: Bases
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['sources/**', 'scripts/**', '.github/workflows/**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bases
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Sources (TCGdex, pokemontcg.io, PokeAPI)
+        run: |
+          cd "$RUNNER_TEMP"
+          git clone -q --depth 1 https://github.com/tcgdex/cards-database tcgdex
+          git clone -q --depth 1 https://github.com/PokemonTCG/pokemon-tcg-data ptcg
+          git clone -q --depth 1 --filter=blob:none --sparse https://github.com/PokeAPI/pokeapi pokeapi
+          git -C pokeapi sparse-checkout set data/v2/csv
+
+      - name: Construction
+        run: |
+          T="$RUNNER_TEMP"; mkdir -p "$T/out"
+          node sources/parse.js "$T/tcgdex/data" "$T/raw.json"
+          node sources/build.js "$T/raw.json" "$T/out/cards.json" "$T/ptcg/cards/en"
+          node sources/poke.js "$T/pokeapi/data/v2/csv" "$T/out/pokedex.json"
+          node sources/poke2.js "$T/pokeapi/data/v2/csv" "$T/raw.json" "$T/out/connexions.json"
+
+      - name: Validation
+        run: node scripts/validate.js "$RUNNER_TEMP/out" data
+
+      - name: Publication (seulement si le contenu a changé)
+        run: |
+          R=$(node scripts/publish.js "$RUNNER_TEMP/out" data)
+          echo "Résultat : $R"
+          if [ "$R" = "changed" ]; then
+            N=$(node -e "const m=require('./data/manifest.json');console.log(m.counts.cards+' cartes, '+m.counts.sets+' extensions, dernière : '+m.latest.name)")
+            git add data
+            git -c user.name="bases-bot" -c user.email="actions@github.com" commit -q -m "Bases du $(date -u +%F) : $N"
+            git push -q
+          fi

@@ -1,0 +1,27 @@
+{
+ "schema": 1,
+ "built": "2026-11-25",
+ "files": {
+  "cards.json": {
+   "sha256": "c38226c14a5047fb3b8e0e6ae37d96f817928c1d719bf6ad26f20f33cb7d8c2c",
+   "size": 421589
+  },
+  "pokedex.json": {
+   "sha256": "ed4a7a9fd32b80a224c36d3560f0b4716ac160d44adac63697f5e048994cb64b",
+   "size": 23513
+  },
+  "connexions.json": {
+   "sha256": "714c739e9a59b549d26008b8e008f5cf3b74a668779cd1236f5037bd5c01875f",
+   "size": 4578
+  }
+ },
+ "counts": {
+  "cards": 9528,
+  "sets": 169,
+  "species": 1025
+ },
+ "latest": {
+  "name": "30ᵉ Anniversaire",
+  "date": "2026-09-16"
+ }
+}

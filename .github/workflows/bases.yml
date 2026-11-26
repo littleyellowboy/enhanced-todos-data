@@ -39,13 +39,13 @@ jobs:
       - name: Construction
         run: |
           T="$RUNNER_TEMP"; mkdir -p "$T/out"
-          node sources/parse.js "$T/tcgdex/data" "$T/raw.json"
-          node sources/build.js "$T/raw.json" "$T/out/cards.json" "$T/ptcg/cards/en"
-          node sources/poke.js "$T/pokeapi/data/v2/csv" "$T/out/pokedex.json"
-          node sources/poke2.js "$T/pokeapi/data/v2/csv" "$T/raw.json" "$T/out/connexions.json"
+          { node sources/parse.js "$T/tcgdex/data" "$T/raw.json" | tail -c 2000
+            node sources/build.js "$T/raw.json" "$T/out/cards.json" "$T/ptcg/cards/en" | tail -c 2000
+            node sources/poke.js "$T/pokeapi/data/v2/csv" "$T/out/pokedex.json" | tail -c 2000
+            node sources/poke2.js "$T/pokeapi/data/v2/csv" "$T/raw.json" "$T/out/connexions.json"; } 2>&1 | tee -a "$T/build.log"
 
       - name: Validation
-        run: node scripts/validate.js "$RUNNER_TEMP/out" data
+        run: node scripts/validate.js "$RUNNER_TEMP/out" data 2>&1 | tee -a "$RUNNER_TEMP/build.log"
 
       - name: Publication (seulement si le contenu a changé)
         run: |
@@ -57,3 +57,14 @@ jobs:
             git -c user.name="bases-bot" -c user.email="actions@github.com" commit -q -m "Bases du $(date -u +%F) : $N"
             git push -q
           fi
+
+      # En cas d'échec : journal poussé sur la branche ci-log (Claude n'a pas accès aux journaux Actions, seulement au git).
+      - name: Journal d'échec (branche ci-log)
+        if: failure()
+        run: |
+          cd "$RUNNER_TEMP" && rm -rf ci-log && mkdir ci-log && cd ci-log
+          git init -q -b ci-log
+          tail -c 200000 "$RUNNER_TEMP/build.log" > build.log 2>/dev/null || echo "pas de journal" > build.log
+          echo "run ${{ github.run_number }} — commit ${{ github.sha }} — $(date -u)" > info.txt
+          git add . && git -c user.name=ci -c user.email=ci@local commit -q -m "Échec ${{ github.run_number }}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" ci-log
